@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RigPlaner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: Kopf mit Anmeldung, Garage-Leiste mit Fahrzeugen, darunter Teile-Seitenleiste links und Modell + Umbau-Check rechts */
+:root{
+  --bg:#eceeed; --surface:#ffffff; --stage:#dfe4e1; --ink:#1b2220; --muted:#5d6763; --line:#d2d7d4;
+  --accent:#b8521c; --accent-soft:#f6e6dc; --body:#3d4a46; --glass:#9fb3ad; --tyre:#1e2422; --rim:#8d9894; --beam:#f2c14e;
+  --ok:#2c7a4b; --ok-soft:#e1f1e7; --warn:#a46a10; --warn-soft:#f8ecd2;
+  --unk:#66706c; --unk-soft:#e7eae8; --bad:#b0342c; --bad-soft:#f7e0dd;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121615; --surface:#1b2120; --stage:#202826; --ink:#e7ebe9; --muted:#9aa5a0; --line:#2e3634;
+  --accent:#e47c43; --accent-soft:#3a2418; --body:#aab6b1; --glass:#4a5a55; --tyre:#0b0e0d; --rim:#6f7b77; --beam:#f2c14e;
+  --ok:#5cc187; --ok-soft:#173224; --warn:#e2a948; --warn-soft:#352812;
+  --unk:#a3aca8; --unk-soft:#262d2b; --bad:#ec7168; --bad-soft:#3a1c1a; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#121615; --surface:#1b2120; --stage:#202826; --ink:#e7ebe9; --muted:#9aa5a0; --line:#2e3634;
+  --accent:#e47c43; --accent-soft:#3a2418; --body:#aab6b1; --glass:#4a5a55; --tyre:#0b0e0d; --rim:#6f7b77; --beam:#f2c14e;
+  --ok:#5cc187; --ok-soft:#173224; --warn:#e2a948; --warn-soft:#352812;
+  --unk:#a3aca8; --unk-soft:#262d2b; --bad:#ec7168; --bad-soft:#3a1c1a; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px 48px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0 12px;border-bottom:2px solid var(--ink);flex-wrap:wrap}
+.brand{font:700 30px/1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+.brand span{color:var(--accent)}
+.auth{display:flex;align-items:center;gap:8px;font-size:13px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px}
+.auth .led{width:8px;height:8px;border-radius:50%;background:var(--unk)}
+.auth.cloud .led{background:var(--ok)} .auth.local .led{background:var(--warn)} .auth.err .led{background:var(--bad)}
+h1,h2{font:700 20px/1.1 var(--display);letter-spacing:.05em;text-transform:uppercase;margin:0;text-wrap:balance}
+h1{font-size:26px}
+.label{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.banner{margin-top:12px;font-size:13.5px;border:1px solid var(--line);border-left:4px solid var(--warn);background:var(--surface);padding:8px 12px;border-radius:0 6px 6px 0}
+/* Garage-Leiste */
+.garage{margin-top:16px;display:grid;gap:10px}
+.garage-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+.vcard{flex:0 0 220px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:10px;cursor:pointer;display:grid;gap:4px}
+.vcard[aria-current="true"]{border:2px solid var(--ink);padding:9px}
+.vcard svg{width:100%;height:auto;display:block}
+.vcard b{font-size:14px;line-height:1.25}
+.vcard small{color:var(--muted);font-size:12px}
+.vcard.add{display:grid;place-items:center;border-style:dashed;color:var(--muted);font-weight:600;min-height:120px}
+.addform{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:14px;display:grid;gap:10px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.field{display:grid;gap:4px}
+.field select,.field input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--bg)}
+/* Hauptbereich */
+.main{display:grid;grid-template-columns:360px minmax(0,1fr);gap:20px;margin-top:18px;align-items:start}
+@media (max-width:920px){.main{grid-template-columns:1fr}.side{order:2}.stagecol{order:1}}
+.side{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;display:grid;gap:10px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:920px){.side{position:static;max-height:none}}
+.bar{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;cursor:pointer;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.list{display:grid;gap:8px}
+.part{position:relative;border:1px solid var(--line);border-radius:6px;padding:10px 10px 10px 16px;display:grid;gap:6px;background:var(--surface)}
+.part::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:6px 0 0 6px;background:var(--stripe)}
+.part.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.part h3{margin:0;font:600 14.5px/1.3 var(--sans)}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
+.pill{display:inline-flex;align-items:center;font:600 11.5px var(--sans);padding:2px 9px;border-radius:999px;background:var(--soft);color:var(--strong);border:1px solid var(--strong)}
+.s-ok{--stripe:var(--ok);--soft:var(--ok-soft);--strong:var(--ok)}
+.s-warn{--stripe:var(--warn);--soft:var(--warn-soft);--strong:var(--warn)}
+.s-unk{--stripe:var(--unk);--soft:var(--unk-soft);--strong:var(--unk)}
+.s-bad{--stripe:var(--bad);--soft:var(--bad-soft);--strong:var(--bad)}
+.proof{font:12px var(--mono);color:var(--muted);word-break:break-word}
+.notes{margin:0;font-size:13px}
+.price{font:600 14px var(--sans);font-variant-numeric:tabular-nums}
+.price small{font-weight:400;color:var(--muted);font-size:12px}
+.btn{border:1px solid var(--ink);background:var(--surface);border-radius:4px;padding:6px 11px;cursor:pointer;font-weight:600;font-size:13px;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.added{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.ghost{border-color:var(--line);font-weight:500}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.hidden-note{font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:6px;padding:8px 10px}
+.hidden-note summary{cursor:pointer}
+.hidden-note ul{margin:6px 0 0;padding-left:18px}
+/* Bühne */
+.stagecol{display:grid;gap:16px}
+.stage{background:var(--surface);border:2px solid var(--ink);border-radius:6px;overflow:hidden}
+.stage-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline;padding:14px 16px 0}
+.typeline{font:12.5px var(--mono);color:var(--muted)}
+.model{background:var(--stage);margin:12px 16px 0;border-radius:4px}
+.model svg{display:block;width:100%;height:auto}
+.model .body-g,.model .wheel-g{transition:transform .45s cubic-bezier(.3,.7,.3,1)}
+@media (prefers-reduced-motion:reduce){.model .body-g,.model .wheel-g{transition:none}}
+.legend{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0}
+.tag{font-size:12px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 7px}
+.spec{padding:12px 16px 16px}
+.spec details summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.spec .fields{margin-top:10px}
+.check-panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:grid;gap:14px}
+.verdict{border-radius:4px;padding:12px;background:var(--soft);border:1px solid var(--strong)}
+.verdict b{display:block;font:700 19px/1.15 var(--display);letter-spacing:.04em;text-transform:uppercase;color:var(--strong)}
+.verdict span{font-size:13px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:640px){.grid2{grid-template-columns:1fr}}
+.totals{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-variant-numeric:tabular-nums;align-items:end}
+.totals .big{font:700 30px/1 var(--display)}
+.plan-items{list-style:none;margin:0;padding:0;display:grid}
+.plan-items li{display:grid;grid-template-columns:10px 1fr auto auto;gap:8px;align-items:center;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--stripe)}
+.x{border:0;background:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:2px 4px}
+.rules{display:grid;gap:8px}
+.rule{font-size:13.5px;border-left:4px solid var(--strong);background:var(--soft);padding:8px 10px;border-radius:0 4px 4px 0}
+.rule b{display:block;font:500 11.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--strong)}
+.check{margin:0;padding-left:18px;font-size:13.5px}
+.empty{font-size:13.5px;color:var(--muted)}
+.toast{font-size:12.5px;color:var(--ok);min-height:1em}
+.foot{margin-top:28px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);max-width:80ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Rig<span>Planer</span></div>
+    <div class="auth" id="auth" role="status"><span class="led"></span><span id="auth-text">Anmeldung wird geprüft …</span></div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="garage" aria-labelledby="garage-h">
+    <div class="row"><h1 id="garage-h">Meine Garage</h1><span class="label" id="garage-count"></span></div>
+    <div class="garage-strip" id="strip"></div>
+    <form class="addform" id="addform" hidden>
+      <div class="row"><h2>Fahrzeug hinzufügen</h2><button type="button" class="btn ghost" id="add-cancel">Abbrechen</button></div>
+      <div class="fields">
+        <div class="field"><label class="label" for="add-model">Modell</label><select id="add-model"></select></div>
+        <div class="field"><label class="label" for="add-name">Spitzname (optional)</label><input id="add-name" maxlength="40" placeholder="z. B. Alltags-Ranger"></div>
+      </div>
+      <div><button class="btn primary" type="submit">In die Garage stellen</button></div>
+    </form>
+  </section>
+
+  <div class="main">
+    <aside class="side" aria-labelledby="parts-h">
+      <h2 id="parts-h">Teile für dieses Fahrzeug</h2>
+      <div class="bar" id="cats" role="group" aria-label="Kategorie"></div>
+      <label class="toggle"><input type="checkbox" id="only-free"> Nur eintragungsfreie Teile</label>
+      <div class="list" id="list"></div>
+    </aside>
+
+    <div class="stagecol">
+      <section class="stage" aria-labelledby="veh-title">
+        <div class="stage-head">
+          <div><h2 id="veh-title"></h2><div class="typeline" id="typeline"></div></div>
+          <div class="actions"><button class="btn ghost" type="button" id="rename">Umbenennen</button><button class="btn danger" type="button" id="remove">Aus Garage entfernen</button></div>
+        </div>
+        <div class="model" id="model"></div>
+        <div class="legend" id="legend"></div>
+        <div class="spec">
+          <details id="spec-d"><summary>Fahrzeugdaten ändern (Ausstattung, Motor, Kabine, Räder)</summary>
+            <div class="fields" id="spec"></div>
+          </details>
+        </div>
+      </section>
+
+      <section class="check-panel" aria-labelledby="plan-h">
+        <div class="row"><h2 id="plan-h">Umbau-Check</h2><button class="btn ghost" id="reset" type="button">Umbau leeren</button></div>
+        <div id="verdict"></div>
+        <div class="grid2">
+          <div style="display:grid;gap:10px">
+            <div class="totals" id="totals"></div>
+            <ul class="plan-items" id="plan-items"></ul>
+            <div class="actions"><button class="btn" id="copy" type="button">Teileliste kopieren</button></div>
+            <div class="toast" id="toast" role="status"></div>
+          </div>
+          <div style="display:grid;gap:10px">
+            <div class="label">Kombinations-Check</div>
+            <div class="rules" id="rules"></div>
+            <div id="checklist"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <p class="foot"><b>Planungshilfe, keine Zusage.</b> Angaben aus den verlinkten Gutachten und Händlerseiten, Stand 15.11.2026. Verbindlich entscheidet der Prüfer (TÜV, DEKRA, GTÜ, KÜS). Gutachten und ABE beim Fahren mitführen. Preise sind Händlerpreise und können sich ändern.</p>
+</div>
+
+<script>
+/* ---------- Fahrzeuge ---------- */
+const VEH={
+ ranger19:{name:"Ford Ranger (2019–2022)",make:"Ford",type:"Typ 2AB",body:"pickup",
+   trims:["XL","XLT","Limited","Wolftrak","Wildtrak","Thunder","Stormtrak","Raptor"],raptorTrim:"Raptor",
+   engines:[[96,"2.0 EcoBlue · 130 PS"],[125,"2.0 EcoBlue · 170 PS"],[157,"2.0 EcoBlue Bi-Turbo · 213 PS"],[147,"3.2 TDCi · 200 PS"]],
+   drives:["4x4","4x2"],cabs:["doka","extra","einzel"],wheels:[16,17,18],def:{trim:"Wildtrak",engine:157,drive:"4x4",cab:"doka",wheel:18}},
+ ranger23:{name:"Ford Ranger (ab 2023)",make:"Ford",type:"Typ 2AB (ab Nachtrag 09)",body:"pickup",
+   trims:["XL","XLT","Tremor","Wildtrak","Platinum","Raptor"],raptorTrim:"Raptor",
+   engines:[[125,"2.0 EcoBlue · 170 PS"],[151,"2.0 EcoBlue Bi-Turbo · 205 PS"],[177,"3.0 V6 EcoBlue · 241 PS"],[292,"3.0 V6 EcoBoost (Raptor) · 397 PS"]],
+   drives:["4x4","4x2"],cabs:["doka","extra","einzel"],wheels:[17,18,20],def:{trim:"Wildtrak",engine:177,drive:"4x4",cab:"doka",wheel:18}},
+ amarok23:{name:"VW Amarok (ab 2023)",make:"VW",type:"Typ T1",body:"pickup",
+   trims:["Amarok","Life","Style","PanAmericana","Aventura"],
+   engines:[[125,"2.0 TDI · 170 PS"],[151,"2.0 TDI · 205 PS"],[177,"3.0 V6 TDI · 241 PS"]],
+   drives:["4x4"],cabs:["doka"],wheels:[17,18,20],def:{trim:"PanAmericana",engine:177,drive:"4x4",cab:"doka",wheel:18}},
+ hilux16:{name:"Toyota Hilux (ab 2016)",make:"Toyota",type:"Typ AN1P",body:"pickup",
+   trims:["Duty","Comfort","Executive","Invincible","GR Sport"],
+   engines:[[110,"2.4 D-4D · 150 PS"],[130,"2.8 D-4D · 177 PS"],[150,"2.8 D-4D · 204 PS"]],
+   drives:["4x4"],cabs:["doka","extra","einzel"],wheels:[17,18],def:{trim:"Invincible",engine:150,drive:"4x4",cab:"doka",wheel:18}},
+ jimny18:{name:"Suzuki Jimny (ab 2018)",make:"Suzuki",type:"Typ GJ / HJ",body:"suv",
+   trims:["Comfort","Comfort+","Pro (Nutzfahrzeug)"],
+   engines:[[75,"1.5 Benzin · 102 PS"]],drives:["4x4"],cabs:["3-Türer"],wheels:[15],def:{trim:"Comfort+",engine:75,drive:"4x4",cab:"3-Türer",wheel:15}}
+};
+const CABNAME={doka:"Doppelkabine",extra:"Extrakabine",einzel:"Einzelkabine","3-Türer":"3-Türer"};
+
+/* ---------- Teile ---------- */
+const STATUS={ok:["Eintragungsfrei","s-ok"],warn:["Abnahme nötig","s-warn"],unk:["Unklar – prüfen","s-unk"],bad:["Nicht zulässig / nur Offroad","s-bad"]};
+const H="https://documents.hansen-styling-parts.de/Gutachten%20-%20Reports/";
+const isR=v=>v.raptor, is4=v=>v.drive==="4x4", doka=v=>v.cab==="doka";
+const P=[
+ /* Allgemein, für alle Fahrzeuge */
+ {id:"g-tire",veh:"*",cat:"Reifen",name:"Reifen in Seriengröße, z. B. All-Terrain",st:"ok",proof:"Fahrzeugpapiere",notes:"Größe, Last- und Geschwindigkeitsindex wie im Fahrzeugschein (Feld 15) oder COC.",price:null,url:"https://www.reifen.com/en-de/tyres/cfg/ford/ranger-272",vis:{}},
+ {id:"g-ledbar",veh:"*",cat:"Licht",group:"light",name:"LED-Bar ohne E-Prüfzeichen (Dach)",st:"bad",proof:"keiner",notes:"Nur als Arbeitsscheinwerfer im Stand und abseits öffentlicher Straßen.",price:null,url:"https://www.bueromarkt-ag.de/led_bar.html",vis:{roofbar:1}},
+ {id:"g-bar",veh:"*",cat:"Frontbügel",group:"bar",name:"Frontbügel ohne EG-Genehmigung",st:"bad",proof:"keiner",notes:"Frontschutzsysteme brauchen eine EG-Typgenehmigung nach VO (EG) 78/2009.",price:null,url:"https://www.bussgeldkatalog.org/bullenfaenger/",vis:{bar:1}},
+
+ /* Ford Ranger 2019–2022 */
+ {id:"r19-t17",veh:["ranger19"],cat:"Reifen",name:"265/65 R17 (Seriengröße 17 Zoll)",st:"ok",proof:"Fahrzeugpapiere",notes:"Häufig bei Doppelkabine.",price:null,url:"https://www.reifen.com/en-de/tyres/cfg/ford/ranger-272",fit:v=>v.wheel==17||"Nur bei 17-Zoll-Serienrad",vis:{}},
+ {id:"r19-t18",veh:["ranger19"],cat:"Reifen",name:"265/60 R18 (Seriengröße 18 Zoll)",st:"ok",proof:"Fahrzeugpapiere",notes:"Größe der höheren Ausstattungen.",price:null,url:"https://www.reifen.com/en-de/tyres/cfg/ford/ranger-272",fit:v=>v.wheel==18||"Nur bei 18-Zoll-Serienrad",vis:{}},
+ {id:"r19-rc31a",veh:["ranger19"],cat:"Felgen",group:"wheel",name:"Brock RC31 7x17 ET55 + 255/65 R17",st:"ok",proof:"ABE laut Brock",notes:"Lochkreis 6x139, Mittenloch 93,1.",price:null,url:"https://www.brock.de/?p=25989958",fit:v=>(is4(v)&&!isR(v))||"Nur Allrad, nicht Raptor",vis:{rim:17}},
+ {id:"r19-rc31b",veh:["ranger19"],cat:"Felgen",group:"wheel",big:1,name:"Brock RC31 7x17 ET55 + 265/70 R17",st:"warn",proof:"Teilegutachten RA-001206-A0-216",notes:"Auflagen A01 und G01: Abnahme beim Prüfer.",price:null,url:"https://files.pneu.jfnet.de/pdf/RA-001206-A0-216/RA-001206-A0-216-06~FO-6-139,7-93-ET55_RC31-707.pdf",fit:v=>(is4(v)&&!isR(v))||"Nur Allrad, nicht Raptor",vis:{rim:17,big:1}},
+ {id:"r19-b45a",veh:["ranger19"],cat:"Felgen",group:"wheel",name:"Brock B45 7x17 ET55 + 255/65 R17",st:"ok",proof:"ABE laut Brock",notes:"Vier Farben. Preis pro Felge.",price:262,per:"Stück",qty:4,url:"https://www.brock.de/?p=25989958",vis:{rim:17}},
+ {id:"r19-wtec",veh:["ranger19"],cat:"Felgen",group:"wheel",big:1,needFlare:1,liftNote:"Reifen 275/65 R18 und 285/65 R18 nur zusammen mit Eibach +30 mm.",name:"Hansen W-TEC All Terrain 8x18 ET45",st:"warn",proof:"Teilegutachten 22-00009-CP-BWG-00 (TÜV SÜD)",notes:"Traglast 1250 kg. Reifen 255/60 bis 285/65 R18. Ein Reifenfabrikat, keine Schneeketten.",price:1380,per:"laut Shop",url:H+"W-TEC%20Felgen/18%22%20W-TEC%20All%20Terrain/Ford%20Ranger.pdf",fit:v=>(is4(v)&&!isR(v)&&v.kw>=110)||"Nur 4x4 mit 110–157 kW, nicht Raptor",vis:{rim:18,big:1}},
+ {id:"r19-eib",veh:["ranger19"],cat:"Fahrwerk",group:"lift",eibach:1,name:"Eibach Pro-Lift-Kit +30 mm",st:"warn",proof:"Teilegutachten TU-026597-A0-024 (TÜV Nord)",notes:"Ab 26.02.2019. Nicht mit Luftfahrwerk oder Niveauregulierung.",price:null,url:H+"Eibach%20Pro-Lift%20Kit/Ford%20Ranger%20%282019-2022%29/45008_Ford_Ranger_2019%2B.pdf",fit:v=>(is4(v)&&!isR(v))||"Nur 4x4, nicht Raptor",vis:{lift:30}},
+ {id:"r19-eibkoni",veh:["ranger19"],cat:"Fahrwerk",group:"lift",eibach:1,damperIncl:1,name:"Eibach/Koni +30 mm Komplettfahrwerk",st:"warn",proof:"TÜV-Teilegutachten (Eibach-Federn)",notes:"Federn und Koni-Dämpfer im Set.",price:1243,url:"https://www.hansen-styling-parts.de/en/Pickup/Ford-Ranger/Ranger-2019-2022/",fit:v=>(is4(v)&&!isR(v))||"Nur 4x4, nicht Raptor",vis:{lift:30}},
+ {id:"r19-ome20",veh:["ranger19"],cat:"Fahrwerk",group:"lift",name:"OME Fahrwerk ca. 20–30 mm",st:"unk",proof:"nicht angegeben",notes:"Gutachten beim Händler anfragen.",price:2365,url:"https://gpc-offroad.com/en/products/ome-fahrwerk-ford-ranger-ca-50-mm-hoherlegung-ab-2019",fit:v=>!isR(v)||"Nicht für Raptor angegeben",vis:{lift:25}},
+ {id:"r19-ome40",veh:["ranger19"],cat:"Fahrwerk",group:"lift",auflast:1,name:"OME Fahrwerk 40–50 mm mit Auflastung auf 3,5 t",st:"warn",proof:"nicht angegeben",notes:"Auflastung ändert die Fahrzeugpapiere.",price:2835,url:"https://gpc-offroad.com/en/products/ome-fahrwerk-ford-ranger-2019-auflastung-auf-3-5tonnen-ca-40-50mm-hoherlegung",fit:v=>(v.kw!==147&&!isR(v))||"Nur 2.0, nicht Raptor",vis:{lift:45}},
+ {id:"hr-ranger",veh:["ranger19","ranger23"],cat:"Fahrwerk",group:"lift",name:"H&R Höherlegungsfedern +30 mm (28636-1)",st:"warn",proof:"Teilegutachten / TTG laut H&R",notes:"Typ 2AB 4WD ab 2015, nur mit Blattfedern hinten, nicht Raptor, nicht mit Luftfahrwerk oder Niveauregulierung.",price:null,url:"https://www.auto-motor-und-sport.de/tuning/h-r-hoeherlegungsfedern-fuer-den-ford-ranger/",fit:v=>(is4(v)&&!isR(v))||"Nur 4x4, nicht Raptor",vis:{lift:30}},
+ {id:"r19-koni",veh:["ranger19"],cat:"Fahrwerk",group:"damper",name:"Koni Heavy Track Dämpfer vorne (82-2645)",st:"unk",proof:"nicht angegeben",notes:"Für Serie oder bis 30 mm Höherlegung.",price:266,per:"Stück",qty:2,url:"https://www.hansen-styling-parts.de/en/Koni-shock-absorber-Heavy-Track-1-piece-front-axle-fits-Ford-Ranger-2019-2022/47003",fit:v=>is4(v)||"Nur 4x4",vis:{}},
+ {id:"r19-spacer",veh:["ranger19"],cat:"Spurverbreiterung",spacer:1,name:"Eibach Pro-Spacer Distanzscheiben",st:"unk",proof:"Bestätigung PC-22-N184-00",notes:"Spurweite 1560–1590 mm, Gesamt-Einpresstiefe mindestens 23.",price:null,url:"https://eibach.ch/files/gutachten/PC-22-N184-00.pdf",vis:{spacer:1}},
+ {id:"r19-lazer",veh:["ranger19"],cat:"Licht",group:"light",ref:70,name:"Lazer Grill-Kit Triple-R 750 (GK-FR-02K)",st:"ok",proof:"ECE R112 (Fernlicht)",notes:"Mit dem Fernlicht schalten.",price:715,url:"https://www.lightsandstyling.com/en/brands/lazer/ford-ranger-2019-lazer-led-grille-kit.html",fit:v=>!isR(v)||"Raptor hat einen eigenen Grill",vis:{grill:1}},
+ {id:"r19-skid",veh:["ranger19"],cat:"Schutz",name:"Unterfahrschutz Alu, 5-teilig",st:"ok",proof:"laut Händler keine Eintragung",notes:"Mit Tank- und Differenzialschutz.",price:1115,url:"https://hansen-styling-parts.de/en/5-piece-Black-Stealth-aluminum-underride-protection-suitable-for-Ford-Ranger-2019-2022/29801",vis:{skid:1}},
+ {id:"r19-rails",veh:["ranger19"],cat:"Schutz",group:"sill",name:"Rock Rails schwarz strukturiert",st:"warn",proof:"TÜV-Teilegutachten",notes:"47 kg.",price:678,url:"https://hansen-styling-parts.de/en/Black-matt-structured-Rock-Rails-suitable-for-Ford-Ranger-2012-2022-Ranger-Raptor-2019-2022-Double-Cabine/29206-FR23",fit:v=>doka(v)||"Nur Doppelkabine",vis:{slider:1}},
+ {id:"r19-sidebar",veh:["ranger19"],cat:"Schutz",group:"sill",name:"Seitenbügel Ø 100 mm schwarz",st:"warn",proof:"TÜV-Teilegutachten",notes:"Montage ohne Bohren.",price:395,url:"https://hansen-styling-parts.de/en/Black-powder-coated-sidebars-OE-100-mm-suitable-for-Ford-Ranger-2012-2022-Ranger-Raptor-2019-2022-Double-Cabine/28105",fit:v=>doka(v)||"Nur Doppelkabine",vis:{sidebar:1}},
+ {id:"r19-delta",veh:["ranger19"],cat:"Frontbügel",group:"bar",name:"delta4x4 Frontbügel Exklusiv 76 mm",st:"ok",proof:"EG-Genehmigung e20*78/2009*459/2011X*0302*00",notes:"Genehmigung mitführen. Abdeckung Baujahr 2019–2022 im Dokument prüfen.",price:null,url:"https://shop.delta4x4.com/media/pdf/63/3e/7c/Ford-Ranger2AB-FORAN702E.pdf",fit:v=>!isR(v)||"Nicht für Raptor",vis:{bar:1}},
+ {id:"r19-tjm",veh:["ranger19"],cat:"Schnorchel",group:"snorkel",name:"TJM Airtec Schnorchel 2.0",st:"unk",proof:"nicht angegeben",notes:"TJM nennt TÜV nur für ältere 2.2/3.2.",price:null,url:"https://ullsteinconcepts.com/catalogs/snorkel-tjm-ford-ranger-2019.aspx",fit:v=>v.kw!==147||"Nur 2.0 EcoBlue",vis:{snorkel:1}},
+ {id:"r19-flares",veh:["ranger19"],cat:"Kotflügel",group:"flare",name:"Kotflügelverbreiterung (Fender Flares)",st:"warn",proof:"TÜV-Teilegutachten",notes:"Schafft Radabdeckung für breitere Räder.",price:229,url:"https://shop.hansen-styling-parts.de/en/Fender-Flares-suitable-for-Ford-Ranger-2019-2022/2082",fit:v=>doka(v)||"Nur Doppelkabine",vis:{flare:1}},
+
+ /* Ford Ranger ab 2023 */
+ {id:"r23-b45-18",veh:["ranger23"],cat:"Felgen",group:"wheel",name:"Brock B45 7,5x18 ET55 + 255/60 R18",st:"ok",proof:"ABE 55319",notes:"Ranger 2AB ab Modelljahr 2022, 125–177 kW. Auflagen im Gutachten beachten.",price:null,url:"https://www.brock.de/Gutachten/Brock/B45/7.5x18/6x139/B45-7.5x18-6x139-ET55-R4-93.1.pdf",fit:v=>(v.kw<=177)||"Nur 125–177 kW",vis:{rim:18}},
+ {id:"r23-b45-18b",veh:["ranger23"],cat:"Felgen",group:"wheel",big:1,name:"Brock B45 7,5x18 ET55 + 265/65 R18",st:"warn",proof:"ABE 55319",notes:"Auflage A01: Abnahme beim Prüfer.",price:null,url:"https://www.brock.de/Gutachten/Brock/B45/7.5x18/6x139/B45-7.5x18-6x139-ET55-R4-93.1.pdf",fit:v=>(v.kw<=177)||"Nur 125–177 kW",vis:{rim:18,big:1}},
+ {id:"r23-b45-20",veh:["ranger23"],cat:"Felgen",group:"wheel",name:"Brock B45 8x20 ET55,1 + 265/50 R20",st:"ok",proof:"TTG (ABE) laut Brock",notes:"Lochkreis 6x139, Mittenloch 93,1.",price:null,url:"https://www.brock.de/?p=25992579",vis:{rim:20}},
+ {id:"r23-eib",veh:["ranger23"],cat:"Fahrwerk",group:"lift",eibach:1,name:"Eibach Pro-Lift-Kit +30 mm (4- oder 6-Zylinder)",st:"warn",proof:"TÜV-Teilegutachten (Eibach)",notes:"Gutachten nennt Ranger 2AB ab Nachtrag 09 und Amarok T1.",price:409,url:H+"Eibach%20Pro-Lift%20Kit/Ford%20Ranger%20%282023-%29/45015-45018_Ford_Ranger_2023.pdf",fit:v=>!isR(v)||"Nicht für Raptor",vis:{lift:30}},
+ {id:"r23-hr-rap",veh:["ranger23"],cat:"Fahrwerk",group:"lift",name:"H&R Höherlegungsfedern Raptor +40/+30 mm",st:"warn",proof:"Teilegutachten laut H&R",notes:"Nur mit Fox-Live-Dämpfern (adaptive Dämpfung).",price:618,url:"https://de.motor1.com/news/692436/hundr-hoherlegungsfedern-ford-ranger/",fit:v=>isR(v)||"Nur Raptor",vis:{lift:40}},
+ {id:"r23-lazer",veh:["ranger23"],cat:"Licht",group:"light",ref:70,name:"Lazer Grill-Kit Triple-R 750 (Wildtrak)",st:"ok",proof:"ECE R112 (Fernlicht)",notes:"Mit dem Fernlicht schalten. Preis ab.",price:570,url:"https://www.lazerlamps.com/eu/ford-ranger-wildtrak-2023-grille-kit-for-triple-r-750.html",fit:v=>v.trim==="Wildtrak"||"Nur Wildtrak-Grill",vis:{grill:1}},
+ {id:"r23-eura",veh:["ranger23"],cat:"Licht",group:"light",name:"Euralight Grill-Kit mit 2 LED-Scheinwerfern 10\"",st:"ok",proof:"ECE R149",notes:"Zwei Modi: E-Modus für die Straße, heller Modus nur Offroad.",price:null,url:"https://hansen-styling-parts.de/en/Euralight-grille-kit-Ford-Ranger-2023-incl.-2x-LED-spotlights-10-Black-Penta/910-FR23",fit:v=>!isR(v)||"Nicht für Raptor",vis:{grill:1}},
+ {id:"r23-lapis",veh:["ranger23"],cat:"Schutz",group:"sill",name:"Rockslider LAPIS Alu (Horntools)",st:"warn",proof:"TÜV-Teilegutachten",notes:"XL, XLT, Wildtrak, Wildtrak X. 35 kg pro Paar.",price:null,url:"https://www.nakatanenga.de/en/rockslider-lapis-aluminum-from-horntools-for-ford-ranger-from-2023-onwards/HFORARSA02X",fit:v=>(doka(v)&&!isR(v))||"Nur Doppelkabine, nicht Raptor",vis:{slider:1}},
+ {id:"r23-gpcbar",veh:["ranger23"],cat:"Frontbügel",group:"bar",name:"Frontschutzbügel Edelstahl 76 mm",st:"unk",proof:"nicht angegeben",notes:"Laut Händler nach EU-Fußgängerschutz gefertigt. EG-Nummer anfragen.",price:540,url:"https://gpc-offroad.com/en/products/ford-ranger-frontschutzbugel-chrom-edelstahl-76mm-ab-2023",fit:v=>!isR(v)||"Nicht für Raptor",vis:{bar:1}},
+
+ /* VW Amarok ab 2023 */
+ {id:"am-eib",veh:["amarok23"],cat:"Fahrwerk",group:"lift",eibach:1,name:"Eibach Pro-Lift-Kit +30 mm",st:"warn",proof:"TÜV-Teilegutachten (Eibach)",notes:"Gleiches Gutachten wie Ranger ab 2023 (Typ T1 genannt).",price:null,url:H+"Eibach%20Pro-Lift%20Kit/Ford%20Ranger%20%282023-%29/45015-45018_Ford_Ranger_2023.pdf",vis:{lift:30}},
+ {id:"am-hr",veh:["amarok23"],cat:"Fahrwerk",group:"lift",name:"H&R Höherlegungsfedern +35/+30 mm",st:"warn",proof:"Teilegutachten laut H&R",notes:"Nur bei zulässiger Vorderachslast 1.490 kg.",price:583,url:"https://de.motor1.com/news/711670/hundr-hoherlegungsfedern-vw-amarok/",vis:{lift:35}},
+ {id:"am-body",veh:["amarok23"],cat:"Fahrwerk",group:"lift",bodylift:1,name:"delta4x4 Body-Lift 100 mm",st:"unk",proof:"nicht angegeben",notes:"Aluminiumstreben zwischen Rahmen und Karosserie, Leitungen werden verlängert.",price:2600,url:"https://de.motor1.com/news/669289/beast-2-delta4x4-vw-amarok/",vis:{lift:100}},
+ {id:"am-b45",veh:["amarok23"],cat:"Felgen",group:"wheel",name:"Brock B45 8x20 ET55,1 + 255/55 R20",st:"ok",proof:"TTG (ABE) laut Brock",notes:"Lochkreis 6x139.",price:null,url:"https://www.brock.de/?p=25992579",vis:{rim:20}},
+ {id:"am-trak",veh:["amarok23"],cat:"Spurverbreiterung",spacer:1,name:"H&R Trak+ Spurverbreiterung ab 12 mm/Achse",st:"warn",proof:"Teilegutachten laut H&R",notes:"Preis ab.",price:189,url:"https://de.motor1.com/news/711670/hundr-hoherlegungsfedern-vw-amarok/",vis:{spacer:1}},
+ {id:"am-hbar",veh:["amarok23"],cat:"Frontbügel",group:"bar",name:"Frontbügel schwarz matt 76 mm (Hansen)",st:"ok",proof:"EG-Typgenehmigung",notes:"Kompatibel mit Parksensoren und ACC.",price:null,url:"https://www.hansen-styling-parts.de/en/Black-matt-bullbar-suitable-for-VW-Amarok-2023/27118VW",vis:{bar:1}},
+ {id:"am-dakar",veh:["amarok23"],cat:"Frontbügel",group:"bar",noBodylift:1,name:"delta4x4 Frontbügel DAKAR 70 mm schwarz",st:"ok",proof:"EG-Betriebserlaubnis",notes:"Nicht für Amarok mit Body-Lift (dafür gibt es eine eigene Version).",price:null,url:"https://shop.delta4x4.com/en/manufacturers/volkswagen/amarok-v6-t1-2023/buegel/9432/frontschutzbuegel-dakar-schwarz-matt-70mm",vis:{bar:1}},
+
+ /* Toyota Hilux ab 2016 */
+ {id:"hx-eib",veh:["hilux16"],cat:"Fahrwerk",group:"lift",eibach:1,name:"Eibach Pro-Lift-Kit +30 mm (45011)",st:"warn",proof:"Teilegutachten TU-026655-A0-024",notes:"Hilux 4WD Typ AN1P ab 2016.",price:585,url:"https://gpc-offroad.com/en/products/eibach-pro-lift-kit-30mm-hoherlegung-ford-ranger-1",vis:{lift:30}},
+ {id:"hx-hr",veh:["hilux16"],cat:"Fahrwerk",group:"lift",name:"H&R Höherlegungsfedern +35/+30 mm",st:"warn",proof:"Teilegutachten / TTG laut H&R",notes:"2.4 und 2.8 4WD, auch MHEV, nicht GR Sport.",price:625,url:"https://de.motor1.com/news/794522/hundr-toyota-hilux-h%C3%B6herlegungsfedern/",fit:v=>v.trim!=="GR Sport"||"Nicht für GR Sport",vis:{lift:35}},
+ {id:"hx-wtec",veh:["hilux16"],cat:"Felgen",group:"wheel",big:1,liftNote:"Einige Reifengrößen nur mit Eibach +30 mm (TU-026655-A0-024).",name:"Hansen W-TEC 8x18",st:"warn",proof:"Teilegutachten 22-00009-CP-BWG-00 (TÜV SÜD)",notes:"Hilux 110–150 kW.",price:null,url:H+"W-TEC%20Felgen/18%22%20W-TEC%20All%20Terrain/Toyota%20Hilux.pdf",vis:{rim:18,big:1}},
+ {id:"hx-fm-a",veh:["hilux16"],cat:"Felgen",group:"wheel",name:"Fondmetal 18\" ET20 + 265/60 R18",st:"ok",proof:"ABE 55023",notes:"Nur Extra Cab und Double Cab, 110–150 kW.",price:null,url:"https://b2b.fondmetal.com/media/documents/RA-001338-A0-072-01~TO-6-139,7-106-ET20_84001880.pdf",fit:v=>v.cab!=="einzel"||"Nicht für Einzelkabine",vis:{rim:18}},
+ {id:"hx-fm-b",veh:["hilux16"],cat:"Felgen",group:"wheel",big:1,name:"Fondmetal 18\" ET20 + 285/55 R18",st:"warn",proof:"ABE 55023",notes:"Auflage A01: Abnahme beim Prüfer.",price:null,url:"https://b2b.fondmetal.com/media/documents/RA-001338-A0-072-01~TO-6-139,7-106-ET20_84001880.pdf",fit:v=>v.cab!=="einzel"||"Nicht für Einzelkabine",vis:{rim:18,big:1}},
+ {id:"hx-lazer",veh:["hilux16"],cat:"Licht",group:"light",ref:70,canNote:1,name:"Lazer Grill-Kit Triple-R 750 (2021+)",st:"ok",proof:"ECE R112, Referenzzahl 35 je Lampe",notes:"Ab 2024 mit LED-Scheinwerfern: CAN-Interface für das Fernlicht-Signal nötig.",price:740,url:"https://autosparky.ie/products/lazerlamps-grille-kit-toyota-hilux-2021-2x-triple-r-750-lightbars-with-white-or-amber-position-lights",fit:v=>v.trim!=="GR Sport"||"GR Sport hat einen eigenen Grill",vis:{grill:1}},
+ {id:"hx-lazer-gr",veh:["hilux16"],cat:"Licht",group:"light",ref:70,name:"Lazer Grill-Kit GR Sport (2023+)",st:"ok",proof:"ECE R112 (Ref. 2x 35) bzw. R149",notes:"Preis ab.",price:570,url:"https://lazerlamps.com/eu/toyota-hilux-gr-sport-2022.html",fit:v=>v.trim==="GR Sport"||"Nur GR Sport",vis:{grill:1}},
+
+ /* Suzuki Jimny ab 2018 */
+ {id:"jm-215",veh:["jimny18"],cat:"Reifen",big:1,name:"215/75 R15 auf Serienfelge",st:"warn",proof:"Rad-/Reifengutachten nötig",notes:"Beliebtes Upgrade. Steht meist nicht im Fahrzeugschein: Eintragung nötig.",price:null,url:"https://eu.jimnystyle.com/blogs/news/215-75r15-bf-goodrich-ko3-white-lettering-now-available",vis:{big:1}},
+ {id:"jm-alcar",veh:["jimny18"],cat:"Felgen",group:"wheel",name:"Alcar Offroad ORK 15\" (ABE 46216)",st:"ok",proof:"ABE 46216, Nachtrag",notes:"Jimny GJ und HJ, 75 kW. Reifen 195/80, 205/75, 215/70, 215/75 R15. Größe nicht im Schein: Papiere berichtigen.",price:null,url:"https://felgen.jfnet.de/abe/00056899/56899502.pdf",vis:{rim:15}},
+ {id:"jm-hp",veh:["jimny18"],cat:"Felgen",group:"wheel",name:"High Peak J-02 6x15 ET-5",st:"unk",proof:"TÜV-Freigabe laut Händler",notes:"Art des Nachweises prüfen. Mit 215/75 R15 laut Händler TÜV-geprüft.",price:null,url:"https://nakatanenga.de/en/alloy-wheel-for-suzuki-jimny-2-gj-hj-high-peak-j-02-6x15-offset-5/HIGHPEAK-02-SUJI2-A",vis:{rim:15}},
+ {id:"jm-eib",veh:["jimny18"],cat:"Fahrwerk",group:"lift",eibach:1,name:"Eibach Pro-Lift-Kit (E30-80-003-02-22)",st:"warn",proof:"Teilegutachten 182XT0225-00 (TÜV Rheinland)",notes:"Jimny GJ. Preis ca.",price:299,url:H+"Eibach%20Pro-Lift%20Kit/Suzuki%20Jimny%20GJ_HJ%20%282018-%29/45003_Suzuki_Jimny_GJ.pdf",vis:{lift:30}},
+ {id:"jm-hr",veh:["jimny18"],cat:"Fahrwerk",group:"lift",name:"H&R Höherlegungsfedern ca. +20 mm",st:"warn",proof:"Teilegutachten laut H&R",notes:"Jimny ab 2018.",price:306,url:"https://www.ebay.de/p/19035057767",vis:{lift:20}},
+ {id:"jm-trek",veh:["jimny18"],cat:"Fahrwerk",group:"lift",name:"TREKFINDER Komplettfahrwerk +40 mm",st:"warn",proof:"TÜV-Teilegutachten",notes:"Optional 10-mm-Distanzringe laut Gutachten.",price:null,url:"https://nakatanenga.de/en/feder-distanz-ring-spacer-hoeherlegung-niveauausgleich-trekfinder/1-FDR10",vis:{lift:40}},
+ {id:"jm-spv",veh:["jimny18"],cat:"Spurverbreiterung",spacer:1,name:"TREKFINDER Spurverbreiterung 44 mm",st:"warn",proof:"Teilegutachten",notes:"Im Gutachten nur eine Rad-/Reifenkombination aufgeführt.",price:269,url:"https://nakatanenga.de/en/spurverbreiterungen-fuer-suzuki-jimny-ii-typ-gj-und-hj/1-SUJI2SPV44",vis:{spacer:1}}
+];
+const byId=Object.fromEntries(P.map(p=>[p.id,p]));
+
+/* ---------- Zustand ---------- */
+const KEY="rigplaner-v2";
+const uid=()=>Math.random().toString(36).slice(2,9);
+function newVehicle(model,name){const d=VEH[model].def;return{id:uid(),model,name:name||"",trim:d.trim,engine:d.engine,drive:d.drive,cab:d.cab,wheel:d.wheel,plan:[]}}
+function example(){const v=newVehicle("ranger19","Beispiel-Umbau");Object.assign(v,{trim:"Stormtrak",engine:157,wheel:18,plan:["r19-eib","r19-wtec","r19-lazer"]});return{v:2,vehicles:[v],active:v.id}}
+function loadLocal(){try{const s=localStorage.getItem(KEY);if(s)return JSON.parse(s);
+  const o=localStorage.getItem("rigplaner-v1");if(o){const j=JSON.parse(o),v=newVehicle("ranger19");Object.assign(v,{trim:j.veh.trim,engine:+j.veh.engine,drive:j.veh.drive,cab:j.veh.cab,wheel:+j.veh.wheel,plan:(j.plan||[]).map(id=>({tire17:"r19-t17",tire18:"r19-t18",rc31a:"r19-rc31a",rc31b:"r19-rc31b",b45a:"r19-b45a",wtec:"r19-wtec",eibach:"r19-eib",eibkoni:"r19-eibkoni",ome20:"r19-ome20",ome40:"r19-ome40",koni:"r19-koni",spacer:"r19-spacer",lazer:"r19-lazer",skid:"r19-skid",rails:"r19-rails",sidebar:"r19-sidebar",delta:"r19-delta",tjm:"r19-tjm",flares:"r19-flares"}[id])).filter(Boolean)});return{v:2,vehicles:[v],active:v.id}}
+ }catch(e){}return null}
+function valid(s){return s&&Array.isArray(s.vehicles)&&s.vehicles.every(v=>VEH[v.model]&&Array.isArray(v.plan))}
+let S=loadLocal();if(!valid(S))S=example();
+let cat="Alle",confirmRemove=false;
+const $=id=>document.getElementById(id);
+const eur=n=>n.toLocaleString("de-DE")+" €";
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const active=()=>S.vehicles.find(v=>v.id===S.active)||S.vehicles[0];
+function vctx(v){const m=VEH[v.model];return{...v,kw:+v.engine,wheel:+v.wheel,raptor:!!m.raptorTrim&&v.trim===m.raptorTrim}}
+function partsFor(v){return P.filter(p=>p.veh==="*"||p.veh.includes(v.model))}
+function fits(p,v){if(!p.fit)return true;const r=p.fit(vctx(v));return r===true?true:r}
+const cost=p=>p.price==null?null:p.price*(p.qty||1);
+const items=v=>v.plan.map(id=>byId[id]).filter(Boolean);
+const title=v=>v.name||VEH[v.model].name;
+
+/* ---------- Speichern: Browser + Konto ---------- */
+let cloud=null,lastSent="",writing=Promise.resolve(),saveTimer=null;
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
+  if(cloud){clearTimeout(saveTimer);saveTimer=setTimeout(pushCloud,700);setAuth("cloud","speichert …")}}
+function pushCloud(){const body=JSON.stringify(S);if(!cloud||body===lastSent)return setAuth("cloud");
+  writing=writing.then(()=>cloud.ref.set(JSON.parse(body))).then(()=>{lastSent=body;setAuth("cloud")}).catch(e=>{
+    if(e&&e.code==="invalid_argument"){cloud=null;setAuth("local","Nur Leserechte: nur in diesem Browser gespeichert");}
+    else setAuth("err","Speichern fehlgeschlagen, später erneut");});}
+function setAuth(kind,extra){const el=$("auth");el.className="auth "+(kind==="cloud"?"cloud":kind==="err"?"err":"local");
+  const who=cloud&&cloud.name?` als ${cloud.name}`:"";
+  $("auth-text").textContent=kind==="cloud"?`Angemeldet${who} · ${extra||"gespeichert ✓"}`:extra||"Nicht angemeldet · nur in diesem Browser";
+  const inClaude=!!(window.claude&&window.claude.use);
+  if(kind==="local"&&!extra&&!inClaude)$("auth-text").textContent="In diesem Browser gespeichert";
+  const b=$("banner");if(kind==="local"&&!extra){b.hidden=false;b.textContent=inClaude?"Du bist nicht angemeldet. Deine Garage bleibt nur in diesem Browser. Melde dich mit deinem Claude-Konto an, damit sie auf allen Geräten gespeichert wird.":"Deine Garage wird in diesem Browser gespeichert. Konten zum Speichern auf allen Geräten kommen bald."}else b.hidden=true;}
+async function initCloud(){
+  const C=window.claude;if(!C||!C.use){setAuth("local");return}
+  let user,db;try{[user,db]=await Promise.all([C.use("user"),C.use("db")])}catch(e){}
+  if(!user||!db){setAuth("local");return}
+  let id=null;try{id=await user.id()}catch(e){}
+  if(!id){setAuth("local");return}
+  let name="";try{const me=await user.me();name=(me&&me.name)||""}catch(e){}
+  const ref=db.doc("data/users/"+id+"/garage");
+  setAuth("cloud","lädt …");
+  const t=setTimeout(()=>setAuth("err","Konto gerade nicht erreichbar, lokal gespeichert"),10000);
+  try{const snap=await ref.get();clearTimeout(t);cloud={ref,name};
+    const d=snap.exists?snap.data():null;
+    if(d&&valid(d)){S=JSON.parse(JSON.stringify(d));lastSent=JSON.stringify(S);try{localStorage.setItem(KEY,lastSent)}catch(e){}render();setAuth("cloud")}
+    else pushCloud();
+  }catch(e){clearTimeout(t);cloud=null;setAuth("err","Konto gerade nicht erreichbar, lokal gespeichert")}
+}
+
+/* ---------- Modell (Seitenansicht) ---------- */
+function geom(v){
+  const its=items(v).filter(p=>fits(p,v)===true);
+  let lift=0,rim=+v.wheel,big=false,o={};
+  its.forEach(p=>{const s=p.vis||{};if(s.lift)lift=Math.max(lift,s.lift);if(s.rim)rim=s.rim;if(s.big||p.big)big=true;Object.keys(s).forEach(k=>o[k]=1)});
+  return{lift,rim,big,o,its}
+}
+function drawModel(v,small){
+  const m=VEH[v.model],g=geom(v),suv=m.body==="suv";
+  const base=suv?33:36,r=base+(g.rim-(suv?15:17))*2.2+(g.big?5:0);
+  const ground=268,wx=suv?[192,452]:[150,500],cy=ground-r;
+  const dy=-((r-base)*0.9+g.lift*0.42);
+  const A=(on)=>on?'var(--accent)':'none';
+  let body,glass,extras="";
+  if(!suv){
+    const cx={doka:262,extra:300,einzel:345}[v.cab]||262;
+    body=`M40 152 L${cx} 152 L${cx} 100 Q${cx} 92 ${cx+10} 92 L425 92 Q438 92 445 101 L478 142 L590 150 Q606 152 608 168 L610 200 Q610 212 598 212 L548 212 A52 52 0 0 0 452 212 L198 212 A52 52 0 0 0 102 212 L52 212 Q40 212 40 200 Z`;
+    glass=`M${cx+12} 101 L420 101 Q430 101 436 108 L462 140 L${cx+12} 140 Z`;
+    extras=`<line x1="${cx+12}" y1="152" x2="452" y2="152" stroke="var(--glass)" stroke-width="1.5"/>`+(v.cab==="doka"?`<line x1="${(cx+452)/2-10}" y1="101" x2="${(cx+452)/2-10}" y2="205" stroke="var(--stage)" stroke-width="2"/>`:"")+`<rect x="594" y="158" width="12" height="8" rx="2" fill="var(--beam)" opacity=".75"/><line x1="46" y1="158" x2="46" y2="205" stroke="var(--stage)" stroke-width="2"/>`;
+  }else{
+    body=`M112 104 Q112 86 130 86 L392 86 Q404 86 408 98 L420 132 L510 138 Q524 140 524 154 L524 196 Q524 208 512 208 L500 208 A48 48 0 0 0 404 208 L240 208 A48 48 0 0 0 144 208 L124 208 Q112 208 112 196 Z`;
+    glass=`M136 96 L388 96 Q396 96 399 104 L410 132 L136 132 Z`;
+    extras=`<line x1="270" y1="96" x2="270" y2="200" stroke="var(--stage)" stroke-width="2"/><circle cx="100" cy="160" r="30" fill="var(--tyre)"/><circle cx="100" cy="160" r="14" fill="var(--rim)"/><rect x="510" y="150" width="12" height="10" rx="5" fill="var(--beam)" opacity=".75"/>`;
+  }
+  const F=suv?{front:524,grillY:166,roofY:86,roofX:[150,380],sill:[244,400],skid:[420,524],sn:"M414 150 L404 96 L396 80"}:{front:610,grillY:180,roofY:92,roofX:[300,420],sill:[202,448],skid:[478,600],sn:"M470 156 L452 104 L446 84"};
+  const L=[];
+  if(g.o.skid)L.push(`<path d="M${F.skid[0]} 214 L${F.skid[1]} 214 L${F.skid[1]-14} 224 L${F.skid[0]+10} 224 Z" fill="var(--accent)" opacity=".9"><title>Unterfahrschutz</title></path>`);
+  if(g.o.slider)L.push(`<rect x="${F.sill[0]}" y="212" width="${F.sill[1]-F.sill[0]}" height="10" rx="3" fill="var(--accent)"><title>Rockslider</title></rect>`);
+  if(g.o.sidebar)L.push(`<line x1="${F.sill[0]}" y1="220" x2="${F.sill[1]}" y2="220" stroke="var(--accent)" stroke-width="9" stroke-linecap="round"><title>Seitenbügel</title></line>`);
+  if(g.o.bar){const f=F.front;L.push(`<g fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round"><title>Frontbügel</title><path d="M${f-4} 150 Q${f+14} 152 ${f+14} 172 L${f+14} 206 Q${f+14} 214 ${f-2} 214"/><line x1="${f+14}" y1="182" x2="${f-2}" y2="182"/></g>`)}
+  if(g.o.grill){const f=F.front;L.push(`<g><title>LED-Zusatzfernlicht</title><rect x="${f-24}" y="${F.grillY-6}" width="18" height="6" rx="2" fill="var(--beam)"/><rect x="${f-24}" y="${F.grillY+6}" width="18" height="6" rx="2" fill="var(--beam)"/><path d="M${f} ${F.grillY-4} L${f+60} ${F.grillY-18} L${f+60} ${F.grillY+22} L${f} ${F.grillY+12} Z" fill="var(--beam)" opacity=".18"/></g>`)}
+  if(g.o.roofbar)L.push(`<rect x="${F.roofX[0]}" y="${F.roofY-12}" width="${F.roofX[1]-F.roofX[0]}" height="8" rx="2" fill="none" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="5 3"><title>LED-Bar ohne Zulassung</title></rect>`);
+  if(g.o.snorkel)L.push(`<path d="${F.sn}" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><title>Schnorchel</title></path>`);
+  const flare=g.o.flare?wx.map(x=>`<path d="M${x-58} ${suv?208:212} A60 60 0 0 1 ${x+58} ${suv?208:212}" fill="none" stroke="var(--accent)" stroke-width="7"/>`).join(""):"";
+  const wheels=wx.map(x=>`<g><circle cx="${x}" cy="${cy}" r="${r}" fill="var(--tyre)"/>
+     <circle cx="${x}" cy="${cy}" r="${r*0.6}" fill="${g.o.rim?'var(--accent)':'var(--rim)'}" opacity="${g.o.rim?.85:1}"/>
+     <circle cx="${x}" cy="${cy}" r="${r*0.22}" fill="var(--tyre)"/>${g.o.spacer?`<circle cx="${x}" cy="${cy}" r="${r*0.34}" fill="none" stroke="var(--bg)" stroke-width="3" stroke-dasharray="4 3"/>`:""}</g>`).join("");
+  const dims=!small&&g.lift?`<g font-family="IBM Plex Mono, monospace" font-size="13" fill="var(--accent)"><text x="${suv?250:250}" y="${ground-14}">Höherlegung +${g.lift} mm</text></g>`:"";
+  return `<svg viewBox="0 0 680 290" role="img" aria-label="Seitenansicht ${esc(title(v))} mit gewählten Teilen">
+    <line x1="10" y1="${ground}" x2="670" y2="${ground}" stroke="var(--muted)" stroke-width="1.5"/>
+    <g class="wheel-g">${wheels}</g>
+    <g class="body-g" style="transform:translateY(${dy.toFixed(1)}px)">
+      <path d="${body}" fill="var(--body)"/><path d="${glass}" fill="var(--glass)"/>${extras}${flare}${L.join("")}
+    </g>${dims}</svg>`;
+}
+
+/* ---------- Ansicht ---------- */
+function renderStrip(){
+  const st=$("strip");st.innerHTML="";
+  S.vehicles.forEach(v=>{const b=document.createElement("button");b.type="button";b.className="vcard";b.setAttribute("aria-current",v.id===S.active);
+    const it=items(v),c=it.map(cost).filter(x=>x!=null).reduce((a,b)=>a+b,0);
+    b.innerHTML=`${drawModel(v,true)}<b>${esc(title(v))}</b><small>${v.name?esc(VEH[v.model].name)+" · ":""}${it.length} Teile · ${eur(c)}</small>`;
+    b.onclick=()=>{S.active=v.id;confirmRemove=false;cat="Alle";save();render()};st.appendChild(b)});
+  const add=document.createElement("button");add.type="button";add.className="vcard add";add.textContent="+ Fahrzeug hinzufügen";
+  add.onclick=()=>{$("addform").hidden=false;$("add-model").focus()};st.appendChild(add);
+  $("garage-count").textContent=`${S.vehicles.length} ${S.vehicles.length===1?"Fahrzeug":"Fahrzeuge"}`;
+}
+function renderStage(){
+  const v=active(),m=VEH[v.model],x=vctx(v);
+  $("veh-title").textContent=title(v);
+  $("typeline").textContent=`${m.name} · ${m.type} · ${v.trim} · ${x.kw} kW · ${v.drive} · ${CABNAME[v.cab]} · ${v.wheel} Zoll`;
+  $("model").innerHTML=drawModel(v);
+  const g=geom(v),tags=[];if(g.lift)tags.push(`+${g.lift} mm Höherlegung`);
+  g.its.forEach(p=>{if(p.vis&&Object.keys(p.vis).length)tags.push(p.cat+": "+p.name)});
+  $("legend").innerHTML=tags.length?tags.map(t=>`<span class="tag">${esc(t)}</span>`).join(""):'<span class="empty">Serienzustand. Wähle links Teile, das Modell zeigt sie.</span>';
+  const sel=(k,label,opts)=>`<div class="field"><label class="label" for="sp-${k}">${label}</label><select id="sp-${k}">${opts.map(([val,t])=>`<option value="${val}"${String(v[k])===String(val)?" selected":""}>${t}</option>`).join("")}</select></div>`;
+  $("spec").innerHTML=sel("trim","Ausstattung",m.trims.map(t=>[t,t]))+sel("engine","Motor",m.engines.map(([k,t])=>[k,`${t} (${k} kW)`]))+sel("drive","Antrieb",m.drives.map(d=>[d,d]))+sel("cab","Kabine",m.cabs.map(c=>[c,CABNAME[c]]))+sel("wheel","Serienrad",m.wheels.map(w=>[w,w+" Zoll"]));
+  ["trim","engine","drive","cab","wheel"].forEach(k=>{$("sp-"+k).onchange=e=>{v[k]=["engine","wheel"].includes(k)?+e.target.value:e.target.value;
+    if(k==="trim"&&m.raptorTrim&&v.trim===m.raptorTrim){v.drive="4x4";v.cab="doka";v.engine=m.engines[m.engines.length-1][0]}save();render()}});
+  $("remove").textContent=confirmRemove?"Wirklich entfernen?":"Aus Garage entfernen";
+}
+function renderCats(v){
+  const cats=["Alle",...new Set(partsFor(v).map(p=>p.cat))];if(!cats.includes(cat))cat="Alle";
+  $("cats").innerHTML="";cats.forEach(c=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=c;b.setAttribute("aria-pressed",c===cat);b.onclick=()=>{cat=c;renderList()};$("cats").appendChild(b)});
+}
+function renderList(){
+  const v=active();renderCats(v);
+  const onlyFree=$("only-free").checked,ok=[],no=[];
+  partsFor(v).filter(p=>cat==="Alle"||p.cat===cat).forEach(p=>{const f=fits(p,v);f===true?ok.push(p):no.push([p,f])});
+  const shown=ok.filter(p=>!onlyFree||p.st==="ok");
+  const L=$("list");L.innerHTML="";
+  if(!shown.length)L.innerHTML='<p class="empty">In dieser Auswahl passt kein Teil.</p>';
+  shown.forEach(p=>{const[label,cls]=STATUS[p.st],on=v.plan.includes(p.id);
+    const el=document.createElement("article");el.className="part "+cls+(on?" on":"");
+    const price=p.price==null?'<span class="price"><small>Preis auf Anfrage</small></span>':`<span class="price">${eur(p.price)}${p.per?` <small>${p.per}</small>`:""}</span>`;
+    el.innerHTML=`<div class="row"><span class="label">${esc(p.cat)}</span><span class="pill">${label}</span></div><h3>${esc(p.name)}</h3><div class="proof">${esc(p.proof)}</div><p class="notes">${esc(p.notes)}</p>
+      <div class="row">${price}<div class="actions"><a class="btn ghost" href="${p.url}" target="_blank" rel="noopener">Quelle ↗</a><button type="button" class="btn ${on?"added":"primary"}">${on?"Dran ✓":"+ Anbauen"}</button></div></div>`;
+    el.querySelector("button").onclick=()=>toggle(p.id);L.appendChild(el)});
+  if(no.length){const d=document.createElement("details");d.className="hidden-note";d.innerHTML=`<summary>${no.length} ${no.length===1?"Teil passt":"Teile passen"} nicht zu diesem Fahrzeug</summary><ul>${no.map(([p,r])=>`<li>${esc(p.name)}: ${esc(r)}</li>`).join("")}</ul>`;L.appendChild(d)}
+}
+function toggle(id){const v=active(),i=v.plan.indexOf(id);i>=0?v.plan.splice(i,1):v.plan.push(id);save();renderStrip();renderStage();renderList();renderPlan()}
+
+function rules(v,its){
+  const R=[],has=f=>its.some(f),grp=g=>its.filter(p=>p.group===g);
+  const lifts=grp("lift"),wheels=grp("wheel"),lights=grp("light");
+  its.filter(p=>p.st==="bad").forEach(p=>R.push(["bad","Nicht straßenzulässig",`${p.name}: im Straßenverkehr nicht erlaubt.`]));
+  its.filter(p=>fits(p,v)!==true).forEach(p=>R.push(["bad","Passt nicht",`${p.name}: ${fits(p,v)}`]));
+  if(wheels.length>1)R.push(["bad","Konflikt","Mehr als ein Radsatz. Wähle eine Felge."]);
+  if(lifts.length>1)R.push(["bad","Konflikt","Mehr als ein Fahrwerk. Wähle eines."]);
+  if(grp("bar").length>1)R.push(["bad","Konflikt","Mehr als ein Frontbügel."]);
+  if(has(p=>p.noBodylift)&&has(p=>p.bodylift))R.push(["bad","Konflikt","Dieser Frontbügel passt nicht zum Body-Lift. Dafür gibt es eine eigene Version."]);
+  const n=(wheels.length?1:0)+(lifts.length?1:0)+(has(p=>p.spacer)?1:0);
+  if(n>=2)R.push(["warn","Mehrere Änderungen","Felgen, Fahrwerk und Spurverbreiterung zusammen: Einzelgutachten können ungültig werden. Eine Einzelabnahme ist wahrscheinlich."]);
+  its.filter(p=>p.liftNote).forEach(p=>{if(!has(q=>q.eibach))R.push(["warn","Ohne Höherlegung",p.liftNote])});
+  if(has(p=>p.needFlare)&&!grp("flare").length)R.push(["warn","Radabdeckung","Bei breiteren Reifen die Radabdeckung vorne prüfen. Eine Kotflügelverbreiterung mit Gutachten löst das."]);
+  if(has(p=>p.big))R.push(["info","Tacho","Größerer Abrollumfang: Tacho prüfen und gegebenenfalls anpassen lassen."]);
+  if(lifts.length&&wheels.length)R.push(["info","Fahrwerk + Felgen","Nach Höherlegung nur Serienräder oder Räder mit eigenem Gutachten. Die Kombination bewertet der Prüfer."]);
+  if(has(p=>p.damperIncl)&&grp("damper").length)R.push(["info","Doppelt","Das Komplettfahrwerk enthält schon Stoßdämpfer."]);
+  if(has(p=>p.auflast))R.push(["warn","Auflastung","Auflastung muss in die Fahrzeugpapiere eingetragen werden."]);
+  if(has(p=>p.bodylift))R.push(["warn","Body-Lift","Kein Nachweis angegeben. Vor dem Kauf Gutachten anfragen."]);
+  if(has(p=>p.spacer)&&wheels.length)R.push(["warn","Einpresstiefe","Felge plus Spurverbreiterung: Gutachten von beiden müssen die Kombination erlauben."]);
+  const legal=lights.filter(p=>p.st!=="bad");
+  if(legal.length){const sum=legal.reduce((a,p)=>a+(p.ref||0),0),unknown=legal.some(p=>!p.ref);
+    if(sum>100)R.push(["bad","Fernlicht",`Zusatz-Referenzzahl ${sum}. Alle Fernscheinwerfer zusammen dürfen höchstens 100 haben.`]);
+    else R.push([legal.length>1?"warn":"info","Fernlicht",`Zusatz-Referenzzahl ${sum||"unbekannt"}${unknown&&sum?" + unbekannt":""}. Mit der Zahl deiner Serienscheinwerfer zusammen höchstens 100. Zusatzlicht mit dem Fernlicht schalten.`]);}
+  if(has(p=>p.canNote))R.push(["info","Elektrik","Bei Hilux mit LED-Scheinwerfern (ab 2024) wird ein CAN-Interface fürs Fernlicht-Signal gebraucht."]);
+  its.filter(p=>p.st==="unk").forEach(p=>R.push(["unk","Unterlagen fehlen",`${p.name}: Gutachten oder ABE beim Händler anfragen.`]));
+  return R;
+}
+function renderPlan(){
+  const v=active(),its=items(v);
+  const UL=$("plan-items");UL.innerHTML="";
+  its.forEach(p=>{const li=document.createElement("li");li.className=STATUS[p.st][1];const c=cost(p);
+    li.innerHTML=`<span class="dot"></span><span>${esc(p.name)}</span><span style="font-variant-numeric:tabular-nums">${c==null?"–":eur(c)}</span><button class="x" type="button" aria-label="${esc(p.name)} entfernen">×</button>`;
+    li.querySelector("button").onclick=()=>toggle(p.id);UL.appendChild(li)});
+  if(!its.length)UL.innerHTML='<li style="display:block;border:0" class="empty">Noch keine Teile. Wähle links aus, was dran soll.</li>';
+  const known=its.map(cost).filter(c=>c!=null),open=its.length-known.length;
+  $("totals").innerHTML=`<span class="label">Bekannte Kosten</span><span class="label">${its.length} Teile</span><span class="big">${eur(known.reduce((a,b)=>a+b,0))}</span><span class="empty">${open?`+ ${open} ohne Preis`:""}</span>`;
+  const R=rules(v,its);let vd;
+  if(!its.length)vd=["s-unk","Serienzustand","Wähle Teile, um den Umbau zu prüfen."];
+  else if(R.some(r=>r[0]==="bad"))vd=["s-bad","So nicht zulässig","Mindestens ein Teil ist nicht erlaubt, passt nicht oder kollidiert."];
+  else if(its.some(p=>p.st==="warn")||R.some(r=>r[1]==="Mehrere Änderungen"))vd=["s-warn","Prüfer-Termin nötig","Nach dem Einbau zur Änderungsabnahme. Alle Gutachten mitnehmen."];
+  else if(its.some(p=>p.st==="unk"))vd=["s-unk","Unterlagen fehlen","Für einige Teile fehlt der Nachweis."];
+  else vd=["s-ok","Eintragungsfrei","Papiere im Fahrzeug mitführen."];
+  $("verdict").innerHTML=`<div class="verdict ${vd[0]}"><b>${vd[1]}</b><span>${vd[2]}</span></div>`;
+  const map={bad:"s-bad",warn:"s-warn",info:"s-unk",unk:"s-unk"};
+  $("rules").innerHTML=R.length?R.map(r=>`<div class="rule ${map[r[0]]}"><b>${esc(r[1])}</b>${esc(r[2])}</div>`).join(""):'<p class="empty">Keine Konflikte gefunden.</p>';
+  $("checklist").innerHTML=its.some(p=>p.group==="lift")?`<div class="label" style="margin-bottom:6px">Checkliste für die Werkstatt</div><ul class="check"><li>Scheinwerfer neu einstellen</li><li>Achsvermessung</li><li>Kamera und Radar der Assistenzsysteme prüfen</li><li>Anhängerkupplung: Kugelhöhe laut Gutachten prüfen</li></ul>`:"";
+}
+function render(){renderStrip();renderStage();renderList();renderPlan()}
+
+/* ---------- Aktionen ---------- */
+$("add-model").innerHTML=Object.entries(VEH).map(([k,m])=>`<option value="${k}">${m.name}</option>`).join("");
+$("add-cancel").onclick=()=>{$("addform").hidden=true};
+$("addform").onsubmit=e=>{e.preventDefault();const v=newVehicle($("add-model").value,$("add-name").value.trim());S.vehicles.push(v);S.active=v.id;$("add-name").value="";$("addform").hidden=true;cat="Alle";save();render()};
+$("only-free").onchange=renderList;
+$("reset").onclick=()=>{active().plan=[];save();render()};
+$("remove").onclick=()=>{if(!confirmRemove){confirmRemove=true;renderStage();return}
+  confirmRemove=false;const v=active();S.vehicles=S.vehicles.filter(x=>x.id!==v.id);if(!S.vehicles.length){const n=newVehicle("ranger19");S.vehicles=[n]}S.active=S.vehicles[0].id;save();render()};
+$("rename").onclick=()=>{const v=active(),h=$("veh-title");const inp=document.createElement("input");inp.value=v.name;inp.placeholder=VEH[v.model].name;inp.maxLength=40;inp.id="rename-input";inp.style.cssText="font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg);width:min(320px,100%)";
+  h.replaceChildren(inp);inp.focus();const done=()=>{v.name=inp.value.trim();save();render()};inp.onblur=done;inp.onkeydown=e=>{if(e.key==="Enter")inp.blur();if(e.key==="Escape"){inp.value=v.name;inp.blur()}}};
+$("copy").onclick=async()=>{const v=active(),x=vctx(v);
+  const txt=[`Umbau ${title(v)} – ${VEH[v.model].name}, ${VEH[v.model].type}, ${v.trim}, ${x.kw} kW, ${v.drive}`,...items(v).map(p=>`- ${p.name} | ${STATUS[p.st][0]} | ${p.proof}${cost(p)!=null?" | "+eur(cost(p)):""}`),"Erstellt mit RigPlaner (Beta), Stand 15.11.2026"].join("\n");
+  try{await navigator.clipboard.writeText(txt);$("toast").textContent="Teileliste kopiert."}catch(e){$("toast").textContent="Kopieren nicht möglich. Bitte manuell markieren."}};
+render();setAuth("local","Anmeldung wird geprüft …");initCloud();
+</script>
+</body>
+</html>
